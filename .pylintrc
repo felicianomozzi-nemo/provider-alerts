@@ -24,6 +24,7 @@ disable=
     E1137, # unsupported-assignment-operation (atributos dinámicos de modelo)
     E1138, # unsupported-membership-test (ej: if x in model_instance)
     W0221, # arguments-differ (override de métodos como __init__ en modelos)
+    R0914,  # too-many-locals (frecuente en data scripts)
 
 # Confidence levels of issues to be reported
 confidence=HIGH,CONTROL_FLOW,INFERENCE,INFERENCE_FAILURE,UNDEFINED
@@ -54,7 +55,7 @@ max-positional-arguments=6 # Max positional arguments
 max-locals=15              # Max local variables
 max-returns=6              # Max return statements
 max-branches=12            # Max branches (if/else)
-max-statements=50          # Max statements in a function
+max-statements=70          # Max statements in a function
 max-attributes=15          # Max class attributes
 max-parents=7              # Max class inheritance depth
 max-public-methods=20      # Max public methods per class
@@ -67,13 +68,13 @@ score=yes
 
 [IMPORTS]
 # Allow any import depth
-allow-any-import-level=yes
+allow-any-import-level=no
 # Warn about deprecated modules
 deprecated-modules=yes
 
 [LOGGING]
 # Use old-style logging format (%s)
-logging-format-style=old
+logging-format-style=new
 # Recognize logging modules
 logging-modules=logging
 
@@ -125,19 +126,3 @@ min-similarity-lines=4
 [MISCELLANEOUS]
 # Tags to recognize in comments
 notes=FIXME,XXX,TODO
-
-[STRING]
-# Enforce consistency of quotes (disabled here)
-check-quote-consistency=no
-# Warn about string concatenation over line breaks (disabled here)
-check-str-concat-over-line-jumps=no
-
-[SPELLING]
-# Max spelling suggestions
-max-spelling-suggestions=4
-# Path to a custom dictionary (none set)
-spelling-private-dict-file=
-
-[METHOD_ARGS]
-# Methods that should include a timeout parameter
-timeout-methods=requests.api.delete,requests.api.get,requests.api.head,requests.api.options,requests.api.patch,requests.api.post,requests.api.put,requests.api.request
