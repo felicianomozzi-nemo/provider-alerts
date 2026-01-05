@@ -45,7 +45,7 @@ provider-alerts/
 │   ├── booking_flow.csv          # Input: flujo de operaciones
 │
 └── README.md
-
+```
 ---
 ## 📥 Datos de entrada
 
@@ -146,7 +146,7 @@ Ejemplo de `.env`:
 BOOKING_FLOW_URL=docs/booking_flow.csv
 PROVIDER_SUMMARY_CSV=docs/provider_summary.csv
 PROVIDER_ALERTS_EXCEL=provider_alerts.xlsx
-
+```
 ---
 ## ▶️ Ejecución
 
@@ -157,7 +157,7 @@ Ejecuta el script de transformación:
 
 ```bash
 python data_transformation.py
-
+```
 ---
 ### 2️⃣ Generar reporte de alertas
 
@@ -165,7 +165,7 @@ Ejecuta el script de alertas:
 
 ```bash
 python provider_alerts.py
-
+```
 Este script genera el archivo provider_alerts.xlsx.
 
 ---
@@ -181,7 +181,7 @@ Para ejecutar el análisis de calidad:
 
 ```bash
 pylint *.py
-
+```
 ---
 ## 🔮 Roadmap
 
