@@ -1,0 +1,143 @@
+[MASTER]
+# Files and folders to ignore
+ignore=venv,__pycache__
+# Number of processes to use (1 = sequential)
+jobs=1
+# Python version in use (important for syntax and typing rules)
+py-version=3.13
+# Save linting results between runs
+persistent=no
+# Provide suggestions for improvements
+suggestion-mode=yes
+load-plugins=
+
+[MESSAGES CONTROL]
+# Disable noisy or less useful messages
+disable=
+    R0903, # too-few-public-methods
+    W0511, # fixme (TODO/XXX comments)
+    W0718, # broad-exception-caught
+    E1101, # no-member (SQLAlchemy crea atributos dinámicamente, ej: query, session)
+    E1120, # no-value-for-parameter (constructores dinámicos)
+    E1123, # unexpected-keyword-arg (al instanciar modelos con columnas como kwargs)
+    E1136, # unsubscriptable-object (query.get(), relationships)
+    E1137, # unsupported-assignment-operation (atributos dinámicos de modelo)
+    E1138, # unsupported-membership-test (ej: if x in model_instance)
+    W0221, # arguments-differ (override de métodos como __init__ en modelos)
+
+# Confidence levels of issues to be reported
+confidence=HIGH,CONTROL_FLOW,INFERENCE,INFERENCE_FAILURE,UNDEFINED
+
+[FORMAT]
+# Maximum characters per line
+max-line-length=300
+# Indentation style (spaces, not tabs)
+indent-string='    '
+# Accept any line ending (CRLF or LF)
+expected-line-ending-format=
+
+[BASIC]
+# Naming conventions
+variable-naming-style=snake_case
+function-naming-style=snake_case
+argument-naming-style=snake_case
+method-naming-style=snake_case
+class-naming-style=PascalCase
+const-naming-style=UPPER_CASE
+# Allow these short variable names (for loops, ids, etc.)
+good-names=i,j,k,ex,_,id
+
+[DESIGN]
+# Complexity limits
+max-args=6                 # Max function arguments
+max-positional-arguments=6 # Max positional arguments
+max-locals=15              # Max local variables
+max-returns=6              # Max return statements
+max-branches=12            # Max branches (if/else)
+max-statements=50          # Max statements in a function
+max-attributes=15          # Max class attributes
+max-parents=7              # Max class inheritance depth
+max-public-methods=20      # Max public methods per class
+min-public-methods=0       # Min public methods per class
+
+[REPORTS]
+# Disable detailed reports, keep overall score
+reports=no
+score=yes
+
+[IMPORTS]
+# Allow any import depth
+allow-any-import-level=yes
+# Warn about deprecated modules
+deprecated-modules=yes
+
+[LOGGING]
+# Use old-style logging format (%s)
+logging-format-style=old
+# Recognize logging modules
+logging-modules=logging
+
+[CLASSES]
+# Methods that define instance attributes
+defining-attr-methods=__init__,__new__,setUp,asyncSetUp,__post_init__
+# Protected members allowed for use
+exclude-protected=_asdict,_fields,_replace,_source,_make,os._exit
+
+[VARIABLES]
+# Allow global unused variables (e.g. in configs)
+allow-global-unused-variables=yes
+# Regex for dummy variables
+dummy-variables-rgx=_+$|(_[a-zA-Z0-9_]*[a-zA-Z0-9]+?$)|dummy|^ignored_|^unused_
+# Regex for ignored arguments
+ignored-argument-names=_.*|^ignored_|^unused_
+# Do not allow imports inside __init__.py
+init-import=no
+
+[TYPECHECK]
+# Recognize contextmanager decorators
+contextmanager-decorators=contextlib.contextmanager
+# Ignore None when checking types
+ignore-none=yes
+# Ignore inference issues with opaque types
+ignore-on-opaque-inference=yes
+# Provide hints when members are missing
+missing-member-hint=yes
+missing-member-hint-distance=1
+missing-member-max-choices=1
+
+[REFACTORING]
+# Max nested blocks allowed
+max-nested-blocks=5
+# Functions that never return
+never-returning-functions=sys.exit,argparse.parse_error
+# Suggest using join() with non-empty separator
+suggest-join-with-non-empty-separator=yes
+
+[SIMILARITIES]
+# Ignore these when checking for code duplication
+ignore-comments=yes
+ignore-docstrings=yes
+ignore-imports=yes
+ignore-signatures=yes
+# Minimum lines of similarity before warning
+min-similarity-lines=4
+
+[MISCELLANEOUS]
+# Tags to recognize in comments
+notes=FIXME,XXX,TODO
+
+[STRING]
+# Enforce consistency of quotes (disabled here)
+check-quote-consistency=no
+# Warn about string concatenation over line breaks (disabled here)
+check-str-concat-over-line-jumps=no
+
+[SPELLING]
+# Max spelling suggestions
+max-spelling-suggestions=4
+# Path to a custom dictionary (none set)
+spelling-private-dict-file=
+
+[METHOD_ARGS]
+# Methods that should include a timeout parameter
+timeout-methods=requests.api.delete,requests.api.get,requests.api.head,requests.api.options,requests.api.patch,requests.api.post,requests.api.put,requests.api.request
