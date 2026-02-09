@@ -17,14 +17,15 @@ disable=
     R0903, # too-few-public-methods
     W0511, # fixme (TODO/XXX comments)
     W0718, # broad-exception-caught
-    E1101, # no-member (SQLAlchemy crea atributos dinámicamente, ej: query, session)
-    E1120, # no-value-for-parameter (constructores dinámicos)
-    E1123, # unexpected-keyword-arg (al instanciar modelos con columnas como kwargs)
+    E1101, # no-member 
+    E1120, # no-value-for-parameter 
+    E1123, # unexpected-keyword-arg 
     E1136, # unsubscriptable-object (query.get(), relationships)
-    E1137, # unsupported-assignment-operation (atributos dinámicos de modelo)
-    E1138, # unsupported-membership-test (ej: if x in model_instance)
-    W0221, # arguments-differ (override de métodos como __init__ en modelos)
-    R0914,  # too-many-locals (frecuente en data scripts)
+    E1137, # unsupported-assignment-operation
+    E1138, # unsupported-membership-test (ex: if x in model_instance)
+    W0221, # arguments-differ
+    R0914, # too-many-locals
+    W3101, # missing-timout
 
 # Confidence levels of issues to be reported
 confidence=HIGH,CONTROL_FLOW,INFERENCE,INFERENCE_FAILURE,UNDEFINED
