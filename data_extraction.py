@@ -3,8 +3,10 @@ This scripts connects directly to Kibana and extracts the data that you need.
 """
 
 import os
+import sys
 import socket
 import unicodedata
+import traceback
 from urllib.parse import urlparse
 import pandas as pd
 import requests
@@ -18,6 +20,8 @@ from requests.auth import HTTPBasicAuth
 # =========================
 
 load_dotenv()
+
+HISTORIC_FILE_URL = os.getenv("BOOKING_FLOW_HISTORIC_CSV")
 
 BOOKING_FLOW_URL = os.getenv("BOOKING_FLOW_URL")
 RAW_OUTPUT_CSV = os.getenv("RAW_OUTPUT_CSV_URL")
@@ -152,40 +156,127 @@ def normalize_name(name):
 
     return name_normalized.strip().title()
 
-def load_csvs(hours=1) -> tuple[pd.DataFrame]:
+def load_csvs(time_range: str) -> tuple[pd.DataFrame]:
     """
     Load required CSV files into pandas DataFrames.
 
+    Args:
+        time_range (str): Elasticsearch time expression (e.g. "now-10h", "now-30d", "now-1y")
+    
     Returns:
         tuple[pd.DataFrame, pd.DataFrame]:
             - Booking Flow data
     """
-    endpoint = f"{KIBANA_BUSINESS_URL}/api/console/proxy"
-    params = {"path": f"{BOOKING_FLOW_URL}/_search", "method": "POST"}
-    query = {
-        "size": 10000,
-        "_source": ["@timestamp", "clientname", "operation", "providername", "destinationname", "checkin", "checkout", "success", "hotelname"],
-        "query": {
-            "range": {
-                "@timestamp": { "gte": f"now-{hours}h"}
-            }
-        }
-    }
+    operator = "gte"
+    if "T" in time_range and ":" in time_range:
+        operator = "gt"
 
     try:
-        response = requests.post(endpoint, params=params, auth=KIBANA_BUSINESS_AUTH, headers=KIBANA_BUSINESS_HEADERS, json=query, verify=False)
-        res_json = response.json()
+        endpoint = f"{KIBANA_BUSINESS_URL}/api/console/proxy"
+        params = {"path": f"{BOOKING_FLOW_URL}/_search", "method": "POST"}
 
-        if 'hits' not in res_json:
-            print("Error: Data not found")
-            print(f"Response: {res_json}")
-            return pd.DataFrame()
-        hits = res_json['hits']['hits']
-        if len(hits) == 0:
-            print("There are no registers in the time specified")
-            return pd.DataFrame()
-        df = pd.DataFrame([h['_source'] for h in hits])
+        print(f"\n📡 Consulting ALL business records TODOS los registros de Negocio (time period: {time_range})...")
+        print("Utilizing Search After (without result_window limit)...")
 
+        # First query to initiate the search_after
+        initial_query = {
+            "size": 5000,
+            "_source": ["@timestamp", "clientname", "operation", "providername", "destinationname", "checkin", "checkout", "success", "hotelname"],
+            "sort": ["_id"],
+            "query": {
+                "range": {
+                    "@timestamp": { operator: time_range}
+                }
+            }
+        }
+
+        all_hits = []
+        page_size = 5000
+        batch = 1
+        search_after = None
+        total_downloaded_bytes = 0
+
+        while True:
+            print(f"\n Batch {batch}: Extracting {page_size} registers...")
+
+            # Construct query with search_after if its not the first batch
+            query = initial_query.copy()
+            if search_after is not None:
+                query["search_after"] = search_after
+
+            try:
+                response = requests.post(endpoint, params=params, auth=KIBANA_BUSINESS_AUTH, headers=KIBANA_BUSINESS_HEADERS, json=query, verify=False)
+
+                # Calculate the response size
+                bytes_batch = len(response.content)
+                total_downloaded_bytes = total_downloaded_bytes + bytes_batch
+
+                if response.status_code != 200:
+                    print(f"Status code in batch {batch}: {response.status_code}")
+                    print(f"Response: {response.text[:300]}")
+                    break
+
+                res_json = response.json()
+                hits = res_json.get('hits', {}).get('hits', [])
+
+                if not hits:
+                    print("There are no more registers. End of the extraction")
+                    break
+
+                all_hits.extend(hits)
+                obtained_registers = len(all_hits)
+
+                # Formats the batch size
+                if bytes_batch < 1024:
+                    size_str = f"{bytes_batch} B"
+                elif bytes_batch < 1024 * 1024:
+                    size_str = f"{bytes_batch / 1024:.1f} KB"
+                else:
+                    size_str = f"{bytes_batch / (1024*1024):.2f} MB"
+
+                print(f"+{len(hits)} registers ({size_str}). Total accumulated: {obtained_registers}")
+
+                # If we have less registers than the page_size it means we reached the end
+                if len(hits) < page_size:
+                    print(f" Last page ({len(hits)} registers < {page_size}). End of the extraction.")
+                    break
+
+                # Prepares search_after for the next batch using the last document
+                last_hit = hits[-1]
+                search_after = last_hit.get('sort', [])
+
+                batch = batch + 1
+
+            except Exception as e:
+                print(f" Error in batch {batch}: {e}")
+                break
+        # Show the total downloaded size
+        if total_downloaded_bytes < 1024:
+            total_size_str = f"{total_downloaded_bytes} bytes"
+        elif total_downloaded_bytes < 1024*1024:
+            total_size_str = f"{total_downloaded_bytes / 1024:.2f} KB"
+        else:
+            total_size_str = f"{total_downloaded_bytes / 1024*1024:.2f} MB"
+        print(f"\n Extraction completed: {len(all_hits)} registers")
+        print(f"Total downloaded: {total_size_str}")
+
+        if len(all_hits) == 0:
+            print("There aren't any registers in the time range specified")
+            return pd.DataFrame()
+        # Process data
+        df = pd.DataFrame([h['_source'] for h in all_hits])
+
+        # Calculate size in memory of the data frame
+        df_memory = df.memory_usage(deep=True).sum()
+        if df_memory < 1024:
+            df_size_str = f"{df_memory} bytes"
+        elif df_memory < 1024 * 1024:
+            df_size_str = f"{df_memory / 1024:.2f} KB"
+        else:
+            df_size_str = f"{df_memory / (1024 * 1024):.2f} MB"
+        print(f"Size in memory (DataFrame): {df_size_str}")
+
+        # Normalize names
         df['destinationname'] = df['destinationname'].apply(normalize_name)
         df['clientname'] = df['clientname'].apply(normalize_name)
         df['providername'] = df['providername'].apply(normalize_name)
@@ -194,13 +285,24 @@ def load_csvs(hours=1) -> tuple[pd.DataFrame]:
         return df
     except Exception as e:
         print(f"Error in the extraction: {e}")
-    return pd.DataFrame()
+        traceback.print_exc()
+        return pd.DataFrame()
+
+def load_full_history() -> pd.DataFrame:
+    """
+    Loads and returns a dataframe with the data from the last 10 years
+
+    Returns:
+        dataframe (pd.DataFrame):
+            Data from the last 10 years
+    """
+    return load_csvs("now-10y")
 
 # =========================
 # Export
 # =========================
 
-def export_csv(dataframe: pd.DataFrame) -> None:
+def export_csv(dataframe: pd.DataFrame, output_url: str) -> None:
     """
     Export the dataframe obtained to a CSV file.
 
@@ -208,7 +310,55 @@ def export_csv(dataframe: pd.DataFrame) -> None:
         dataframe (pd.DataFrame):
             Data to be exported
     """
-    dataframe.to_csv(RAW_OUTPUT_CSV, index=False)
+    dataframe.to_csv(output_url, index=False)
+
+# =========================
+# Modes
+# =========================
+
+def run_standard_mode(time_range: str):
+    """
+    Docstring for run_standard_mode
+    
+    :param time_range: Description
+    :type time_range: str
+    """
+    print(f"Extracting data for time range: {time_range}")
+    df = load_csvs(time_range=time_range)
+    export_csv(df, RAW_OUTPUT_CSV)
+
+def run_historic_mode():
+    """
+    Docstring for run_historic_mode
+    """
+    print("Running HISTORIC incremental mode")
+
+    if not os.path.exists(HISTORIC_FILE_URL):
+        print("Historic file not found. Downloading full history...")
+        df = load_full_history()
+        export_csv(df, HISTORIC_FILE_URL)
+        print("Full historic download completed")
+        return
+    print("Historic file found. Loading existing data...")
+    existing_df = pd.read_csv(HISTORIC_FILE_URL)
+
+    if existing_df.empty:
+        print("Historic file empty. Downloading full history...")
+        df = load_full_history()
+        export_csv(df, HISTORIC_FILE_URL)
+        return
+    last_timestamp = pd.to_datetime(existing_df["@timestamp"].max()).isoformat()
+    print(f"Last timestamp found: {last_timestamp}")
+
+    new_data = load_csvs(last_timestamp)
+
+    if new_data.empty:
+        print("No new data found")
+        return
+    updated_df = pd.concat([existing_df, new_data], ignore_index=True)
+    export_csv(updated_df, HISTORIC_FILE_URL)
+
+    print("Historic file updated successfully")
 
 # =========================
 # Main application
@@ -223,8 +373,14 @@ def main() -> None:
     2- Extracts the data necesary for the script
     3- Exports it to a CSV
     """
-    raw_data = load_csvs()
-    export_csv(raw_data)
+    if len(sys.argv) > 1:
+        param = sys.argv[1]
+    else:
+        param = "now-10h" # default
+    if param == "historic":
+        run_historic_mode()
+    else:
+        run_standard_mode(param)
 
 if __name__ == "__main__":
     main()
