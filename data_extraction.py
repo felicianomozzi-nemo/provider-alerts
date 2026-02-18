@@ -182,7 +182,7 @@ def load_csvs(time_range: str) -> tuple[pd.DataFrame]:
         initial_query = {
             "size": 5000,
             "_source": ["@timestamp", "clientname", "operation", "providername", "destinationname", "checkin", "checkout", "success", "hotelname"],
-            "sort": ["_id"],
+            "sort": [{"timestamp": "asc"}],
             "query": {
                 "range": {
                     "@timestamp": { operator: time_range}
