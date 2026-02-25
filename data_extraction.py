@@ -21,10 +21,12 @@ from requests.auth import HTTPBasicAuth
 
 load_dotenv()
 
-HISTORIC_FILE_URL = os.getenv("BOOKING_FLOW_HISTORIC_CSV")
+# DIR info
+HISTORIC_DATA = os.getenv("HISTORIC_DATA")
+CURRENT_DATA = os.getenv("CURRENT_DATA")
 
-BOOKING_FLOW_URL = os.getenv("BOOKING_FLOW_URL")
-RAW_OUTPUT_CSV = os.getenv("RAW_OUTPUT_CSV_URL")
+# Index info
+INDEX_URL = os.getenv("INDEX_URL")
 
 # --- Kibana APM (Infraestructure - Nemo) ---
 KIBANA_APM_URL = os.getenv("KIBANA_APM_URL")
@@ -173,7 +175,7 @@ def load_csvs(time_range: str) -> tuple[pd.DataFrame]:
 
     try:
         endpoint = f"{KIBANA_BUSINESS_URL}/api/console/proxy"
-        params = {"path": f"{BOOKING_FLOW_URL}/_search", "method": "POST"}
+        params = {"path": f"{INDEX_URL}/_search", "method": "POST"}
 
         print(f"\n📡 Consulting ALL business records TODOS los registros de Negocio (time period: {time_range})...")
         print("Utilizing Search After (without result_window limit)...")
@@ -182,7 +184,7 @@ def load_csvs(time_range: str) -> tuple[pd.DataFrame]:
         initial_query = {
             "size": 5000,
             "_source": ["@timestamp", "clientname", "operation", "providername", "destinationname", "checkin", "checkout", "success", "hotelname"],
-            "sort": [{"timestamp": "asc"}],
+            "sort": [{"@timestamp": "asc"}],
             "query": {
                 "range": {
                     "@timestamp": { operator: time_range}
@@ -281,6 +283,12 @@ def load_csvs(time_range: str) -> tuple[pd.DataFrame]:
         df['clientname'] = df['clientname'].apply(normalize_name)
         df['providername'] = df['providername'].apply(normalize_name)
         df['hotelname'] = df['hotelname'].apply(normalize_name)
+        df = df.rename(columns={
+            "providername": "provider_name",
+            "clientname": "client_name",
+            "destinationname": "destination_name",
+            "hotelname": "hotel_name"
+        })
 
         return df
     except Exception as e:
@@ -325,7 +333,8 @@ def run_standard_mode(time_range: str):
     """
     print(f"Extracting data for time range: {time_range}")
     df = load_csvs(time_range=time_range)
-    export_csv(df, RAW_OUTPUT_CSV)
+    output_url = CURRENT_DATA + time_range + "_data.csv"
+    export_csv(df, output_url)
 
 def run_historic_mode():
     """
@@ -333,19 +342,19 @@ def run_historic_mode():
     """
     print("Running HISTORIC incremental mode")
 
-    if not os.path.exists(HISTORIC_FILE_URL):
+    if not os.path.exists(HISTORIC_DATA):
         print("Historic file not found. Downloading full history...")
         df = load_full_history()
-        export_csv(df, HISTORIC_FILE_URL)
+        export_csv(df, HISTORIC_DATA)
         print("Full historic download completed")
         return
     print("Historic file found. Loading existing data...")
-    existing_df = pd.read_csv(HISTORIC_FILE_URL)
+    existing_df = pd.read_csv(HISTORIC_DATA)
 
     if existing_df.empty:
         print("Historic file empty. Downloading full history...")
         df = load_full_history()
-        export_csv(df, HISTORIC_FILE_URL)
+        export_csv(df, HISTORIC_DATA)
         return
     last_timestamp = pd.to_datetime(existing_df["@timestamp"].max()).isoformat()
     print(f"Last timestamp found: {last_timestamp}")
@@ -356,7 +365,7 @@ def run_historic_mode():
         print("No new data found")
         return
     updated_df = pd.concat([existing_df, new_data], ignore_index=True)
-    export_csv(updated_df, HISTORIC_FILE_URL)
+    export_csv(updated_df, HISTORIC_DATA)
 
     print("Historic file updated successfully")
 
