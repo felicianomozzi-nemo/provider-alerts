@@ -48,12 +48,12 @@ No incluye todavía:
 📂 Estructura del Proyecto
 ------------------------------------------------------------
 
-data-alerts/
-│
-├── data_extraction.py
-├── data_transformation.py
-├── generate_alerts.py
-├── .env
+data-alerts  
+│  
+├── data_extraction.py  
+├── data_transformation.py  
+├── generate_alerts.py  
+├── .env  
 ├── README.md
 
 ------------------------------------------------------------
@@ -97,9 +97,6 @@ python data_extraction.py
 
 Por defecto utiliza:
 now-10h
-
-El archivo se guarda como:
-CURRENT_DATA + <time_range>_data.csv
 
 ------------------------------------------------------------
 
@@ -157,17 +154,11 @@ Modo estándar
 
 python data_transformation.py provider_name now-7d
 
-Genera:
-SUMMARY_DIR + provider_name_now-7d_summary.csv
-
 ------------------------------------------------------------
 Modo histórico
 ------------------------------------------------------------
 
 python data_transformation.py provider_name historic
-
-Genera:
-HISTORIC_SUMMARY_DIR + provider_name_summary.csv
 
 ------------------------------------------------------------
 🚦 3) generate_alerts.py
@@ -200,13 +191,12 @@ failure_deviation =
 /
 historic_failure_rate
 
-Clasificación:
-
-<= 25%        → NORMAL
-<= 50%        → CONCERN
-<= 75%        → SEVERE
-> 75%         → URGENT
-NaN / inválido → CAN'T EVALUATE
+Clasificación:  
+\>= -25%        → NORMAL  
+\>= -50%        → CONCERN  
+\>= -75%        → SEVERE  
+\< -75%         → URGENT  
+NaN            → CAN'T EVALUATE  
 
 ------------------------------------------------------------
 📊 Desvío de Volumen
@@ -217,13 +207,12 @@ volume_deviation =
 /
 historic_daily_avg
 
-Clasificación:
-
->= -25%        → NORMAL
->= -50%        → CONCERN
->= -75%        → SEVERE
-< -75%         → URGENT
-NaN            → CAN'T EVALUATE
+Clasificación:  
+\>= -25%        → NORMAL  
+\>= -50%        → CONCERN  
+\>= -75%        → SEVERE  
+\< -75%         → URGENT  
+NaN            → CAN'T EVALUATE  
 
 También se calcula:
 
@@ -242,15 +231,11 @@ Se colorean automáticamente usando openpyxl.
 
 Colores:
 
-NORMAL → Verde  
-CONCERN → Amarillo  
-SEVERE → Rojo  
-URGENT → Bordó  
-CAN'T EVALUATE → Gris  
-
-Output:
-
-OUTPUT_DIR + <group_by_column>_<time_range>.xlsx
+NORMAL → Verde
+CONCERN → Amarillo
+SEVERE → Rojo
+URGENT → Bordó
+CAN'T EVALUATE → Gris
 
 ------------------------------------------------------------
 ▶️ Ejecución End-to-End
