@@ -1,274 +1,349 @@
-# Provider Alerts – Data Quality & Operational Monitoring
+# Data Alerts – Operational Monitoring & Intelligent Alerting
 
-Este proyecto es una **demo avanzada de Ciencia de Datos aplicada al negocio** para Nemo, orientada a detectar **proveedores con problemas operativos** a partir de datos reales extraídos directamente desde Kibana.
+Proyecto de Ciencia de Datos orientado a la detección temprana de desvíos operativos en el ecosistema de Booking Flow.
 
-El objetivo es demostrar el **potencial de explotar datos existentes** para generar alertas accionables, incorporando:
+Data Alerts permite:
 
-- Extracción automatizada desde Elasticsearch/Kibana
-- Transformación y consolidación de métricas
-- Evaluación de alertas operativas
-- Reporte visual en Excel
-- Base preparada para evolución hacia análisis histórico inteligente
+- Extraer datos reales desde Kibana (Business + APM)
+- Construir métricas operativas consolidadas
+- Comparar contra histórico acumulado
+- Detectar desvíos técnicos y de volumen
+- Generar reportes visuales en Excel con semáforo automático
 
----
+El objetivo es demostrar cómo explotar datos existentes para generar alertas accionables sin necesidad de infraestructura compleja.
 
-# 🎯 Objetivo del proyecto
+------------------------------------------------------------
+🎯 Objetivo del Proyecto
+------------------------------------------------------------
 
-- Conectarse a Kibana (APM + Business)
-- Extraer eventos reales de Booking Flow
-- Consolidar métricas por proveedor
-- Detectar:
-  - Problemas técnicos (alta tasa de fallas)
-  - Bajo volumen operativo
-- Generar reportes claros y visuales para perfiles no técnicos
-- Diseñar una solución escalable y extensible
+1. Conectarse a Kibana y validar conectividad
+2. Extraer eventos reales del Booking Flow
+3. Construir dataset histórico incremental
+4. Consolidar métricas por entidad
+5. Comparar período actual vs histórico
+6. Detectar desvíos relevantes
+7. Generar reporte visual para toma de decisiones
 
----
+------------------------------------------------------------
+📦 Alcance de la Versión Actual
+------------------------------------------------------------
 
-# 🧩 Alcance de la versión actual (v2)
+✔ Conexión validada a Kibana (APM + Business)  
+✔ Extracción paginada con search_after  
+✔ Modo estándar por rango dinámico de tiempo  
+✔ Modo histórico incremental (acumulativo)  
+✔ Consolidación flexible por múltiples dimensiones  
+✔ Comparación contra baseline histórico  
+✔ Clasificación de alertas por severidad  
+✔ Exportación a Excel con formato condicional  
+✔ Configuración desacoplada vía .env  
 
-✔ Conexión directa a Kibana  
-✔ Extracción paginada usando `search_after`  
-✔ Modo estándar por rango de tiempo  
-✔ Modo histórico incremental  
-✔ Consolidación automática por proveedor  
-✔ Reporte final en Excel con semáforo visual  
-✔ Configuración desacoplada vía `.env`  
-✔ Código documentado y estructurado  
+No incluye todavía:
+- Modelos estadísticos avanzados
+- Machine Learning
+- Automatización programada (cron / scheduler)
+- Notificaciones automáticas
 
-🚫 Aún no incluye detección estadística avanzada  
-🚫 Aún no incluye automatización programada  
+------------------------------------------------------------
+📂 Estructura del Proyecto
+------------------------------------------------------------
 
----
-
-# 📂 Estructura del proyecto
-
-provider-alerts/
+data-alerts/
 │
-├── data_extraction.py            # Conexión a Kibana + extracción de datos
-├── data_transformation.py        # Consolidación de métricas por proveedor
-├── providers_alerts.py           # Evaluación de alertas + Excel final
-├── .env                          # Variables de entorno (no versionado)
-├── .pylintrc                     # Configuración de calidad de código
+├── data_extraction.py
+├── data_transformation.py
+├── generate_alerts.py
+├── .env
 ├── README.md
 
----
+------------------------------------------------------------
+🔄 Flujo Completo del Sistema
+------------------------------------------------------------
 
-# 🔄 Flujo completo del sistema
+1) Extracción desde Kibana  
+2) Generación de CSV crudo  
+3) Transformación y agregación  
+4) Construcción de baseline histórico  
+5) Evaluación de alertas  
+6) Exportación a Excel formateado  
 
-1️⃣ Extracción desde Kibana  
-2️⃣ Generación de CSV crudo  
-3️⃣ Transformación y agregación por proveedor  
-4️⃣ Evaluación de alertas  
-5️⃣ Exportación a Excel con formato visual  
+------------------------------------------------------------
+📡 1) data_extraction.py
+------------------------------------------------------------
 
----
+Responsabilidades:
 
-# 📡 Extracción de datos (data_extraction.py)
-
-Este script:
-
-- Verifica conectividad y autenticación contra:
-  - Kibana APM
-  - Kibana Business
-- Extrae datos usando paginación `search_after`
+- Verifica conectividad vía socket
+- Verifica autenticación contra /api/status
+- Extrae datos desde Elasticsearch usando proxy de Kibana
+- Implementa paginación mediante search_after
 - Normaliza nombres
 - Exporta CSV crudo
+- Permite modo estándar o histórico incremental
 
-## Modos de ejecución
+------------------------------------------------------------
+Modos de Ejecución
+------------------------------------------------------------
 
-### 🔹 Modo estándar
+🔹 Modo estándar
 
-Extrae datos para un rango de tiempo específico:
-
-```
 python data_extraction.py now-24h
 python data_extraction.py now-7d
 python data_extraction.py now-30d
-```
 
 Si no se pasa parámetro:
 
-```
 python data_extraction.py
-```
 
-Por defecto usa:
-
-```
+Por defecto utiliza:
 now-10h
-```
 
----
+El archivo se guarda como:
+CURRENT_DATA + <time_range>_data.csv
 
-### 🔹 Modo histórico incremental
+------------------------------------------------------------
 
-```
+🔹 Modo histórico incremental
+
 python data_extraction.py historic
-```
 
 Comportamiento:
 
 - Si no existe archivo histórico → descarga últimos 10 años
-- Si existe → detecta último timestamp y trae solo nuevos registros
-- Actualiza el CSV histórico acumulado
+- Si existe → detecta último @timestamp
+- Trae únicamente nuevos registros
+- Actualiza el CSV acumulado
 
-Esto permite construir una base de datos evolutiva sin reprocesar todo cada vez.
+Esto permite construir una base histórica sin reprocesar todo cada vez.
 
----
+------------------------------------------------------------
+📊 2) data_transformation.py
+------------------------------------------------------------
 
-# 📊 Transformación de datos (data_transformation.py)
+Responsabilidades:
 
-Este script:
-
-- Lee el CSV crudo exportado
-- Agrupa por proveedor
+- Lee CSV crudo (actual o histórico)
+- Agrupa por columna configurable
 - Calcula métricas operativas
+- Exporta resumen consolidado
 
-## Métricas generadas
+------------------------------------------------------------
+Columnas soportadas para agrupación
+------------------------------------------------------------
+
+- provider_name
+- hotel_name
+- client_name
+- destination_name
+
+------------------------------------------------------------
+Métricas generadas
+------------------------------------------------------------
 
 - total_operations
 - successful_operations
 - failed_operations
+- period_days
+- daily_avg_operations
 - failure_rate
 
-Output:
+failure_rate = failed_operations / total_operations
 
-```
-SUMMARY_OUTPUT_CSV_URL
-```
+daily_avg_operations = total_operations / period_days
 
----
+------------------------------------------------------------
+Modo estándar
+------------------------------------------------------------
 
-# 🚦 Evaluación de alertas (providers_alerts.py)
+python data_transformation.py provider_name now-7d
 
-Este script:
+Genera:
+SUMMARY_DIR + provider_name_now-7d_summary.csv
 
-- Lee el resumen por proveedor
-- Evalúa dos tipos de alertas
-- Genera Excel formateado con colores
+------------------------------------------------------------
+Modo histórico
+------------------------------------------------------------
 
-## 🔧 Alerta técnica (failure_rate)
+python data_transformation.py provider_name historic
 
-Solo se evalúa si el proveedor tiene ≥ 500 operaciones.
+Genera:
+HISTORIC_SUMMARY_DIR + provider_name_summary.csv
 
-| Estado           | Condición |
-|------------------|-----------|
-| NORMAL           | < 10%     |
-| CONCERN          | 10%–25%   |
-| SEVERE           | > 25%     |
-| CAN'T EVALUATE   | < 500 ops |
+------------------------------------------------------------
+🚦 3) generate_alerts.py
+------------------------------------------------------------
 
----
+Responsabilidades:
 
-## 📉 Alerta de volumen
+- Lee resumen actual
+- Lee resumen histórico
+- Une ambos datasets
+- Calcula desvíos relativos
+- Clasifica severidad
+- Exporta Excel formateado
 
-| Estado   | Operaciones |
-|----------|-------------|
-| URGENT   | < 100       |
-| SEVERE   | 100–499     |
-| CONCERN  | 500–1999    |
-| NORMAL   | ≥ 2000      |
+------------------------------------------------------------
+📉 Lógica de Alertas
+------------------------------------------------------------
 
----
+Se evalúan dos dimensiones:
 
-# 🎨 Semáforo visual en Excel
+1) Desvío de Failure Rate
+2) Desvío de Volumen Operativo
+
+------------------------------------------------------------
+🛠️ Desvío de Failure Rate
+------------------------------------------------------------
+
+failure_deviation =
+(current_failure_rate - historic_failure_rate)
+/
+historic_failure_rate
+
+Clasificación:
+
+<= 25%        → NORMAL
+<= 50%        → CONCERN
+<= 75%        → SEVERE
+> 75%         → URGENT
+NaN / inválido → CAN'T EVALUATE
+
+------------------------------------------------------------
+📊 Desvío de Volumen
+------------------------------------------------------------
+
+volume_deviation =
+(current_daily_avg - historic_daily_avg)
+/
+historic_daily_avg
+
+Clasificación:
+
+>= -25%        → NORMAL
+>= -50%        → CONCERN
+>= -75%        → SEVERE
+< -75%         → URGENT
+NaN            → CAN'T EVALUATE
+
+También se calcula:
+
+- volume_difference_absolute
+
+------------------------------------------------------------
+🎨 Semáforo Visual en Excel
+------------------------------------------------------------
 
 Las columnas:
 
-- failure_alert
-- volume_alert
+- Alerta Fallos
+- Alerta Volumen
 
-Se colorean automáticamente usando `openpyxl`.
+Se colorean automáticamente usando openpyxl.
 
 Colores:
 
-- Verde → NORMAL
-- Amarillo → CONCERN
-- Rojo → SEVERE
-- Bordó → URGENT
-- Gris → CAN'T EVALUATE
+NORMAL → Verde  
+CONCERN → Amarillo  
+SEVERE → Rojo  
+URGENT → Bordó  
+CAN'T EVALUATE → Gris  
 
-Output final:
+Output:
 
-```
-PROVIDER_ALERTS_EXCEL
-```
+OUTPUT_DIR + <group_by_column>_<time_range>.xlsx
 
----
+------------------------------------------------------------
+▶️ Ejecución End-to-End
+------------------------------------------------------------
 
-# ▶️ Ejecución end-to-end
+1️⃣ Extraer período actual
 
-Paso 1 – Extraer datos:
-```
-python data_extraction.py now-24h
-```
+python data_extraction.py now-7d
 
-Paso 2 – Transformar:
-```
-python data_transformation.py
-```
-Paso 3 – Generar alertas:
-```
-python providers_alerts.py
-```
+2️⃣ Actualizar histórico (si corresponde)
+
+python data_extraction.py historic
+
+3️⃣ Generar resumen período actual
+
+python data_transformation.py provider_name now-7d
+
+4️⃣ Generar resumen histórico
+
+python data_transformation.py provider_name historic
+
+5️⃣ Generar reporte de alertas
+
+python generate_alerts.py provider_name now-7d
+
 Resultado final:
-```
-provider_alerts.xlsx
-```
----
+Archivo Excel con alertas clasificadas y coloreadas.
 
-# 🧪 Calidad de código
+------------------------------------------------------------
+⚙️ Configuración (.env)
+------------------------------------------------------------
 
-El proyecto utiliza:
+El proyecto utiliza variables de entorno para:
 
-- Pylint
+- URLs de Kibana
+- Credenciales
+- Índices
+- Paths de entrada y salida
+- Nombres de archivos resumen
+- Directorios históricos
+
+Esto permite desacoplar código de infraestructura.
+
+------------------------------------------------------------
+🧪 Calidad de Código
+------------------------------------------------------------
+
 - Estructura modular
-- Funciones desacopladas
+- Funciones reutilizables
 - Manejo defensivo de errores
-- Logs descriptivos
+- Validación de conectividad
+- Cálculo incremental histórico
+- Normalización de datos
 
-Para ejecutar análisis:
-```
+Puede ejecutarse:
+
 pylint *.py
-```
----
 
-# 🔮 Roadmap
+------------------------------------------------------------
+🔮 Roadmap de Evolución
+------------------------------------------------------------
 
-Evoluciones previstas:
-
-- Incorporar métricas históricas por proveedor
-- Calcular baseline dinámico
-- Detección automática de anomalías
-- Thresholds adaptativos
-- Automatización diaria (cron / scheduler)
+- Baseline dinámico por ventana móvil
+- Detección estadística de anomalías
+- Incorporación de métricas adicionales
+- Automatización diaria
 - Integración con dashboards
-- Sistema de notificaciones (Slack / Email)
+- Notificaciones automáticas (Slack / Email)
+- API interna de alertas
 
----
+------------------------------------------------------------
+💡 Valor para el Negocio
+------------------------------------------------------------
 
-# 💡 Valor para el negocio
+Data Alerts demuestra que:
 
-Este proyecto demuestra que:
+- Los datos operativos ya contienen señales críticas
+- Se pueden detectar desvíos antes de que escalen
+- Es posible construir baseline histórico incremental
+- Se pueden generar reportes claros para perfiles no técnicos
+- La Ciencia de Datos puede integrarse progresivamente
 
-- Los datos operativos actuales ya contienen señales accionables
-- Es posible detectar problemas técnicos antes de que escalen
-- Se pueden identificar proveedores con caída de volumen
-- La Ciencia de Datos puede integrarse incrementalmente
-- Se puede generar impacto sin infraestructura compleja
+------------------------------------------------------------
+🏷️ Nota Final
+------------------------------------------------------------
 
----
+Este repositorio representa una base sólida para evolucionar hacia un sistema de monitoreo inteligente de operaciones.
 
-# 🏷️ Nota final
-
-Este repositorio representa una **prueba de concepto avanzada**.
-
-La arquitectura fue diseñada pensando en:
+La arquitectura fue pensada para:
 
 - Escalabilidad
-- Evolución hacia modelos históricos
-- Posible automatización productiva futura
-- Integración con sistemas internos
+- Evolución analítica
+- Bajo costo operativo
+- Integración futura con sistemas internos
 
-Es una base sólida para evolucionar hacia un sistema real de monitoreo inteligente de proveedores.
+Data Alerts es el primer paso hacia un monitoreo operacional basado en datos reales.
