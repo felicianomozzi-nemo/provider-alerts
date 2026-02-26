@@ -11,6 +11,7 @@ Output is printed to console for exploratory and demo purposes.
 import os
 import sys
 import pandas as pd
+import numpy as np
 from dotenv import load_dotenv
 from openpyxl.styles import PatternFill
 from openpyxl import load_workbook
@@ -21,6 +22,7 @@ from openpyxl import load_workbook
 # =========================
 
 load_dotenv()
+
 SUMMARY_DIR = os.getenv("SUMMARY_DIR")
 HISTORIC_SUMMARY_DIR = os.getenv("HISTORIC_SUMMARY_DIR")
 SUMMARY_ENDING = os.getenv("SUMMARY_ENDING")
@@ -41,6 +43,9 @@ HISTORIC_FILES = {
 
 OUTPUT_DIR = os.getenv("OUTPUT_DIR")
 OUTPUT_ENDING = os.getenv("OUTPUT_ENDING")
+
+MIN_VOLUME = float(os.getenv("MIN_VOLUME"))
+MIN_FAILURE = float(os.getenv("MIN_FAILURE"))
 
 # =========================
 # Alert evaluation logic
@@ -155,7 +160,20 @@ def main() -> None:
     df = evaluate_failure_alert(df)
     df = evaluate_volume_alert(df)
 
-    df.replace([float("inf"), -float("inf")], pd.NA, inplace=True)
+    df.replace([np.inf, -np.inf], np.nan, inplace=True)
+
+    # Filter relevant records
+    volume_condition = (
+        (df["daily_avg_operations"].fillna(0) > MIN_VOLUME) |
+        (df["daily_avg_operations_historic"].fillna(0) > MIN_VOLUME)
+    )
+
+    failure_condition = (
+        (df["failure_rate"].fillna(0) > MIN_FAILURE) |
+        (df["failure_rate_historic"].fillna(0) > MIN_FAILURE)
+    )
+
+    df = df[volume_condition & failure_condition]
 
     columns_to_export = [
         group_by_column,
@@ -171,7 +189,7 @@ def main() -> None:
     ]
 
     df = df[columns_to_export]
-
+    
     df["failure_rate"] = df["failure_rate"].round(4)
     df["failure_rate_historic"] = df["failure_rate_historic"].round(4)
     df["failure_deviation"] = df["failure_deviation"].round(4)
