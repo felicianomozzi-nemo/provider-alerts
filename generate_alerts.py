@@ -189,7 +189,6 @@ def main() -> None:
     ]
 
     df = df[columns_to_export]
-    
     df["failure_rate"] = df["failure_rate"].round(4)
     df["failure_rate_historic"] = df["failure_rate_historic"].round(4)
     df["failure_deviation"] = df["failure_deviation"].round(4)

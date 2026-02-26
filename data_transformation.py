@@ -137,7 +137,7 @@ def main() -> None:
         else:
             time_range = sys.argv[2]
             input_path = CURRENT_DATA + time_range + "_data.csv"
-            output_path = SUMMARY_DIR + group_by_column + "_" + time_range + SUMMARY_ENDING
+            output_path = SUMMARY_DIR + "historic_" + group_by_column + "_" + time_range + SUMMARY_ENDING
             print(f"Running STANDARD transformation mode from {input_path} to {output_path}")
         # Load CSV
         booking_flow_df = pd.read_csv(input_path)
