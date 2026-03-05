@@ -14,9 +14,11 @@ from dotenv import load_dotenv
 # =========================
 load_dotenv()
 
+# Data Inputs
 CURRENT_DATA = os.getenv("CURRENT_DATA")
 HISTORIC_DATA = os.getenv("HISTORIC_DATA")
 
+# Data Outputs
 SUMMARY_DIR = os.getenv("SUMMARY_DIR")
 HISTORIC_SUMMARY_DIR = os.getenv("HISTORIC_SUMMARY_DIR")
 SUMMARY_ENDING = os.getenv("SUMMARY_ENDING")
@@ -26,7 +28,15 @@ SUMMARY_ENDING = os.getenv("SUMMARY_ENDING")
 # =========================
 def calculate_period_days(df: pd.DataFrame) -> int:
     """
-    Calculate number of real days covered by dataset, based on @timestamp column.
+    Calculate number of real days covered by dataset, based on @timestamp column
+
+    Args:
+        df (DataFrame):
+            Dataset of interest in this iteration
+    
+    Returns:
+        int:
+            number of days covered in that dataset
     """
 
     if "@timestamp" not in df.columns:
@@ -51,6 +61,7 @@ def build_summary(booking_flow_df: pd.DataFrame, group_by_column: str) -> pd.Dat
         - Successful operations
         - Failed operations
         - Failure rate
+        - Shared rate
 
     Args:
         booking_flow_df (pd.DataFrame):
@@ -68,7 +79,7 @@ def build_summary(booking_flow_df: pd.DataFrame, group_by_column: str) -> pd.Dat
     # Normalize success column to boolean
     df["success"] = df["success"].astype(bool)
 
-    # Aggregate metrics by designated column
+    # Aggregate DataFrame by designated column and calculates the metrics
     summary = (
         df.groupby(group_by_column)
         .agg(
@@ -81,13 +92,15 @@ def build_summary(booking_flow_df: pd.DataFrame, group_by_column: str) -> pd.Dat
 
     summary["period_days"] = period_days
 
+    # Derived metrics
+    summary["failure_rate"] = ((
+        summary["failed_operations"] / summary["total_operations"]
+    )*100)
+    summary["shared_rate"] = ((
+        summary["failed_operations"] / (summary["failed_operations"].sum())
+    )*100)
     summary["daily_avg_operations"] = (
         summary["total_operations"] / period_days
-    )
-
-    # Derived metrics
-    summary["failure_rate"] = (
-        summary["failed_operations"] / summary["total_operations"]
     )
 
     return summary
@@ -112,10 +125,11 @@ def export_csv(dataframe: pd.DataFrame, output_url: str) -> None:
 
 def main() -> None:
     """
-    Main execution flow of the script.
+    Main execution flow of the script to transform the data
 
     Steps:
-        1. Loads CSV file from the directory provided
+        1- Identifies what column to group the dataset for and in what mode (standard or historic) or what time period
+        2- Loads CSV file from the directory provided depending on the column, the mode and/or the time period
         2. Calculates metrics and generates a Summary
         3. Exports it to a CSV file
     """
@@ -132,12 +146,12 @@ def main() -> None:
         # Select input/output paths
         if mode == "historic":
             input_path = HISTORIC_DATA
-            output_path = HISTORIC_SUMMARY_DIR + group_by_column + SUMMARY_ENDING
+            output_path = HISTORIC_SUMMARY_DIR + "historic_" + group_by_column + SUMMARY_ENDING
             print(f"Running HISTORIC transformation mode from {input_path} to {output_path}")
         else:
             time_range = sys.argv[2]
             input_path = CURRENT_DATA + time_range + "_data.csv"
-            output_path = SUMMARY_DIR + "historic_" + group_by_column + "_" + time_range + SUMMARY_ENDING
+            output_path = SUMMARY_DIR + group_by_column + "_" + time_range + SUMMARY_ENDING
             print(f"Running STANDARD transformation mode from {input_path} to {output_path}")
         # Load CSV
         booking_flow_df = pd.read_csv(input_path)

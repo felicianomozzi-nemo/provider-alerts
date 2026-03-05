@@ -1,5 +1,5 @@
 """
-This scripts connects directly to Kibana and extracts the data that you need.
+This scripts connects directly to Kibana and extracts the data needed.
 """
 
 import os
@@ -12,8 +12,6 @@ import pandas as pd
 import requests
 from dotenv import load_dotenv
 from requests.auth import HTTPBasicAuth
-
-
 
 # =========================
 # Configuration
@@ -150,8 +148,16 @@ result_business = verify_kibana_connection(
 # Data loading
 # =========================
 
-def normalize_name(name):
-    """Normalices names: removes weird characters and standarizes spaces"""
+def normalize_name(name: str) -> str:
+    """Normalices names: removes weird characters and standarizes spaces
+    
+    Args:
+        name (str): name of the column to be standarized
+    
+    Returns:
+        name_normalized:
+            - The name but now it is normalized
+    """
     if pd.isna(name):
         return name
     name_normalized = ''.join(c for c in unicodedata.normalize('NFD', str(name)) if unicodedata.category(c) != 'Mn')
@@ -169,6 +175,7 @@ def load_csvs(time_range: str) -> tuple[pd.DataFrame]:
         tuple[pd.DataFrame, pd.DataFrame]:
             - Booking Flow data
     """
+    # Validates if it should run from a specific timestamp or just go with the elastic time expression
     operator = "gte"
     if "T" in time_range and ":" in time_range:
         operator = "gt"
@@ -326,10 +333,11 @@ def export_csv(dataframe: pd.DataFrame, output_url: str) -> None:
 
 def run_standard_mode(time_range: str):
     """
-    Docstring for run_standard_mode
+    Runs the script in the 'Standard Mode' which means that it has a specific time range
     
-    :param time_range: Description
-    :type time_range: str
+    Args:
+        time_range:
+            Time Range of the period of days of interest
     """
     print(f"Extracting data for time range: {time_range}")
     df = load_csvs(time_range=time_range)
@@ -338,7 +346,9 @@ def run_standard_mode(time_range: str):
 
 def run_historic_mode():
     """
-    Docstring for run_historic_mode
+    Runs the script in the historic mode, which means it'll download ALL data available if there is no
+    historic file already. If it finds a current historic file, it'll read its last timestamp and request
+    data from that timestamp to today.
     """
     print("Running HISTORIC incremental mode")
 
@@ -378,9 +388,11 @@ def main() -> None:
     Main execution flow of the script.
 
     Steps:
-    1- Connects to Kibana
-    2- Extracts the data necesary for the script
-    3- Exports it to a CSV
+    1- Understands the mode requested
+    2- Connects to Kibana to donwload data
+    3- Runs the mode that it identified (standard or historic)
+    4- Downloads the data requested
+    5- Exports it to a CSV in the route specified in the .ENV files
     """
     if len(sys.argv) > 1:
         param = sys.argv[1]
