@@ -26,6 +26,7 @@ disable=
     W0221, # arguments-differ
     R0914, # too-many-locals
     W3101, # missing-timout
+    W0702, # bare-except
 
 # Confidence levels of issues to be reported
 confidence=HIGH,CONTROL_FLOW,INFERENCE,INFERENCE_FAILURE,UNDEFINED

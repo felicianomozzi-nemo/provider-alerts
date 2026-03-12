@@ -13,15 +13,17 @@ import sys
 import pandas as pd
 import numpy as np
 from dotenv import load_dotenv
-from openpyxl.styles import PatternFill
+from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 from openpyxl import load_workbook
-
 
 # =========================
 # Configuration
 # =========================
 
 load_dotenv()
+
+PROVIDER_INFO_URL = os.getenv("PROVIDER_INFO_URL")
 
 SUMMARY_DIR = os.getenv("SUMMARY_DIR")
 HISTORIC_SUMMARY_DIR = os.getenv("HISTORIC_SUMMARY_DIR")
@@ -50,77 +52,65 @@ MIN_FAILURE = float(os.getenv("MIN_FAILURE"))
 # =========================
 # Alert evaluation logic
 # =========================
-def classify_alert(deviation: float, deviation_type: str) -> str:
-    """
-    Returns the string of the alert corresponding to the deviation level, depending if its a
-    failure_rate, volume_rate or shared_rate deviation.
-
-    Args:
-        deviation (float):
-            The deviation that the alert will clasify by.
-        type (str):
-            The type of the deviation (failure_deviation, volume_deviation, shared_deviation)
-    
-    Returns:
-        str:
-            The name of the classified alert.
-    """
-    if deviation_type == "failure_deviation":
-        print(deviation)
-        return "FAILURE"
-    else:
-        if deviation_type == "volume_deviation":
-            print(deviation)
-            return "VOLUME"
-        else:
-            if deviation_type == "shared_deviation":
-                print(deviation)
-                return "SHARED"
-
-def classify_failure_alert(deviation: float) -> str:
+def classify_failure_alert(rate: float, flag: bool) -> str:
     """
     Returns the alert for the failure rate
     """
-    if pd.isna(deviation):
+    if pd.isna(rate):
         return "CAN'T EVALUATE"
-    if deviation <= 0.25:
-        return "NORMAL"
-    elif deviation <= 0.50:
-        return "CONCERN"
-    elif deviation <= 0.75:
-        return "SEVERE"
+    if not flag:
+        if rate >= 30:
+            return "URGENT"
+        if rate >= 22.5:
+            return "SEVERE"
+        if rate >= 15:
+            return "CONCERN"
     else:
-        return "URGENT"
+        if rate >= 20:
+            return "URGENT"
+        if rate >= 15:
+            return "SEVERE"
+        if rate >= 10:
+            return "CONCERN"
+
+    return "OK"
 
 def classify_volume_alert(deviation: float) -> str:
     """
-    Returns the alert for the volume
-    """
-    if pd.isna(deviation):
-        return "CAN'T EVALUATE"
-    if deviation >= -0.25:
-        return "NORMAL"
-    elif deviation >= -0.50:
-        return "CONCERN"
-    elif deviation >= -0.75:
-        return "SEVERE"
-    else:
-        return "URGENT"
+    Classify volume alert based on percentage deviation.
 
-def classify_shared_alert(deviation: float) -> str:
+    Alert levels are triggered only when the operational
+    volume drops compared to the historic baseline.
+
+    Thresholds:
+        CONCERN  -> drop >= 25%
+        SEVERE   -> drop >= 50%
+        URGENT   -> drop >= 100%
+
+    Args:
+        deviation (float): Percentage deviation vs historic volume.
+
+    Returns:
+        str: Alert level.
     """
-    Returns the alert for the shared rate
-    """
+
     if pd.isna(deviation):
         return "CAN'T EVALUATE"
-    if deviation <= 0.25:
+
+    # Volume increased or dropped less than 25%
+    if deviation > -25:
         return "NORMAL"
-    elif deviation <= 0.50:
+
+    # Drop between 25% and 50%
+    if deviation > -50:
         return "CONCERN"
-    elif deviation <= 0.75:
+
+    # Drop between 50% and 100%
+    if deviation > -100:
         return "SEVERE"
-    else:
-        return "URGENT"
+
+    # Drop >= 100%
+    return "URGENT"
 
 def evaluate_failure_alert(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -129,9 +119,13 @@ def evaluate_failure_alert(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         DataFrame: DataFrame with the new columns
     """
-    df["failure_deviation"] = (
-        ((df["failure_rate"] - df["failure_rate_historic"]) / df["failure_rate_historic"])*100)
-    df["failure_alert"] = (df["failure_deviation"]).apply(classify_failure_alert)
+    df["failure_alert"] = df.apply(
+        lambda row: classify_failure_alert(
+            row["failure_rate"],
+            row["politics_search"] == "Sí"
+        ),
+        axis = 1
+    )
 
     return df
 
@@ -139,31 +133,28 @@ def evaluate_volume_alert(df: pd.DataFrame) -> pd.DataFrame:
     """
     Evaluate low-volume alert status.
 
-    Returns:
-        DataFrame: DataFrame with the new columns
-    """
-    df["volume_deviation"] = (
-        ((df["daily_avg_operations"] - df["daily_avg_operations_historic"]) / df["daily_avg_operations_historic"])*100)
+    A volume alert is triggered when the daily average operations
+    dropped at least 25% compared to the historic value.
 
+    Args:
+        df (pd.DataFrame): DataFrame containing current and historic metrics.
+
+    Returns:
+        pd.DataFrame: DataFrame including volume deviation and alert column.
+    """
+    # Calculate percentage deviation vs historic volume
+    df["volume_deviation"] = (
+        ((df["daily_avg_operations"] - df["daily_avg_operations_historic"])
+        / df["daily_avg_operations_historic"]
+    )*100)
+
+    # Calculate absolute difference
     df["volume_difference_absolute"] = (
         df["daily_avg_operations"] - df["daily_avg_operations_historic"]
     )
 
+    # Classify alert severity
     df["volume_alert"] = (df["volume_deviation"]).apply(classify_volume_alert)
-
-    return df
-
-def evaluate_shared_alert(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Evaluate shared_rate alerts
-
-    Returns:
-        DataFrame: DataFrame with the new columns
-    """
-    df["shared_deviation"] = (
-        ((df["shared_rate"] - df["shared_rate_historic"]) / df["shared_rate_historic"])*100)
-
-    df["shared_alert"] = (df["shared_deviation"]).apply(classify_shared_alert)
 
     return df
 
@@ -210,6 +201,7 @@ def main() -> None:
 
     df_current = pd.read_csv(input_csv)
     df_historic = pd.read_csv(historic_csv)
+    provider_info = pd.read_csv(PROVIDER_INFO_URL)
 
     df = df_current.merge(
         df_historic,
@@ -218,80 +210,300 @@ def main() -> None:
         suffixes=("", "_historic")
     )
 
+    df = df.merge(
+        provider_info,
+        on=group_by_column,
+        how="left"
+    )
+
+    # =========================
+    # Normalize provider info fields
+    # =========================
+
+    # Convert binary flags to Yes/No for reporting
+    df["politics_search"] = df["politics_search"].map({1: "Sí", 0: "No"})
+    df["loi"] = df["loi"].map({1: "Sí", 0: "No"})
+    df["mamushka"] = df["mamushka"].map({1: "Sí", 0: "No"})
+
     df = evaluate_failure_alert(df)
     df = evaluate_volume_alert(df)
-    df = evaluate_shared_alert(df)
 
     df.replace([np.inf, -np.inf], np.nan, inplace=True)
 
-    columns_to_export = [
-        group_by_column,
-        "failure_rate",
-        "failure_rate_historic",
-        "failure_deviation",
-        "failure_alert",
-        "daily_avg_operations",
-        "daily_avg_operations_historic",
-        "volume_difference_absolute",
-        "volume_deviation",
-        "volume_alert",
-        "shared_rate",
-        "shared_rate_historic",
-        "shared_deviation",
-        "shared_alert"
+    # =========================
+    # Alert filtering
+    # =========================
+
+    # Failure alerts (ignore OK values)
+    df_failure_alerts = df[df["failure_alert"].isin(["CONCERN", "SEVERE", "URGENT"])]
+
+    # Volume alerts (only drops >= 25%)
+    df_volume_alerts = df[df["volume_deviation"] <= -25]
+
+    # Providers with invalid configuration (current_version = 0)
+    df_version_alerts = df[
+        (df["current_version"] == 0) &
+        (df["total_operations"] > 0)
     ]
 
-    df = df[columns_to_export]
-    df["failure_rate"] = df["failure_rate"].round(2)
-    df["failure_rate_historic"] = df["failure_rate_historic"].round(2)
-    df["failure_deviation"] = df["failure_deviation"].round(2)
-    df["daily_avg_operations"] = df["daily_avg_operations"].round(0)
-    df["daily_avg_operations_historic"] = df["daily_avg_operations_historic"].round(0)
-    df["volume_difference_absolute"] = df["volume_difference_absolute"].round(0)
-    df["volume_deviation"] = df["volume_deviation"].round(2)
-    df["shared_rate"] = df["shared_rate"].round(2)
-    df["shared_rate_historic"] = df["shared_rate_historic"].round(2)
-    df["shared_deviation"] = df["shared_deviation"].round(2)
+    # =========================
+    # Prepare DataFrames for Excel sheets
+    # =========================
 
-    df = df.rename(columns = {
-        group_by_column: "Entidad",
-        "failure_rate": "% Fallos",
-        "failure_rate_historic": "% Fallos Histórico",
-        "failure_deviation": "% Desviación",
-        "failure_alert": "Alerta Fallos",
-        "daily_avg_operations": "Operaciones Diarias Promedio",
-        "daily_avg_operations_historic": "Avg Operaciones Diarias Históricas",
-        "volume_deviation": "% Desviación",
-        "volume_difference_absolute": "Diferencia Absoluta",
-        "volume_alert": "Alerta Volumen",
-        "shared_rate": "% Responsabilidad",
-        "shared_rate_historic": "% Responsabilidad Histórica",
-        "shared_deviation": "% Desviación",
-        "shared_alert": "Alerta Responsabilidad"
+    df_failure_alerts = df_failure_alerts[[
+        group_by_column,
+        "politics_search",
+        "loi",
+        "species",
+        "mamushka",
+        "failure_rate",
+        "failure_rate_historic",
+        "failure_alert"
+    ]]
+
+    df_volume_alerts = df_volume_alerts[[
+        group_by_column,
+        "politics_search",
+        "loi",
+        "species",
+        "mamushka",
+        "daily_avg_operations",
+        "daily_avg_operations_historic",
+        "volume_deviation",
+        "volume_alert"
+    ]]
+
+    df_version_alerts = df_version_alerts[[
+        group_by_column,
+        "politics_search",
+        "loi",
+        "species",
+        "mamushka",
+        "total_operations"
+    ]]
+
+    # Round numeric values for readability
+    df_failure_alerts["failure_rate"] = df_failure_alerts["failure_rate"].round(2)
+    df_failure_alerts["failure_rate_historic"] = df_failure_alerts["failure_rate_historic"].round(2)
+
+    df_volume_alerts["daily_avg_operations"] = df_volume_alerts["daily_avg_operations"].round(0)
+    df_volume_alerts["daily_avg_operations_historic"] = df_volume_alerts["daily_avg_operations_historic"].round(0)
+    df_volume_alerts["volume_deviation"] = df_volume_alerts["volume_deviation"].round(2)
+
+    # Rename columns for presentation
+    df_failure_alerts = df_failure_alerts.rename(columns={
+        group_by_column: "Provider",
+        "politics_search": "Politics Search",
+        "loi": "LOI",
+        "species": "Species",
+        "mamushka": "Mamushka",
+        "failure_rate": "Failure Rate %",
+        "failure_rate_historic": "Historic Failure Rate %",
+        "failure_alert": "Failure Alert"
     })
 
-    # Export to Excel
+    df_volume_alerts = df_volume_alerts.rename(columns={
+        group_by_column: "Provider",
+        "politics_search": "Politics Search",
+        "loi": "LOI",
+        "species": "Species",
+        "mamushka": "Mamushka",
+        "daily_avg_operations": "Current Daily Avg Ops",
+        "daily_avg_operations_historic": "Historic Daily Avg Ops",
+        "volume_deviation": "Volume Deviation %",
+        "volume_alert": "Volume Alert"
+    })
+
+    df_version_alerts = df_version_alerts.rename(columns={
+        group_by_column: "Provider",
+        "politics_search": "Politics Search",
+        "loi": "LOI",
+        "species": "Species",
+        "mamushka": "Mamushka",
+        "total_operations": "Operations in Period"
+    })
+
+    # =========================
+    # Summary metrics
+    # =========================
+
+    total_entities = df[group_by_column].nunique()
+    failure_alerts_count = len(df_failure_alerts)
+    volume_alerts_count = len(df_volume_alerts)
+    invalid_providers_count = len(df_version_alerts)
+
+    summary_data = {
+        "Metric": [
+            "Total Providers Analysed",
+            "Providers with Failure Alerts",
+            "Providers with Volume Alerts",
+            "Invalid Providers (Version = 0)"
+        ],
+        "Value": [
+            total_entities,
+            failure_alerts_count,
+            volume_alerts_count,
+            invalid_providers_count
+        ]
+    }
+
+    df_summary = pd.DataFrame(summary_data)
+
+    # =========================
+    # Export Excel with multiple sheets
+    # =========================
+
     output_path = OUTPUT_DIR + group_by_column + "_" + time_range + OUTPUT_ENDING
-    df.to_excel(output_path, index=False)
 
-    # Apply colors
+    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+        df_summary.to_excel(writer, sheet_name="Summary", index=False)
+        df_failure_alerts.to_excel(writer, sheet_name="Failure Alerts", index=False)
+        df_volume_alerts.to_excel(writer, sheet_name="Volume Alerts", index=False)
+        df_version_alerts.to_excel(writer, sheet_name="Invalid Providers", index=False)
     workbook = load_workbook(output_path)
-    sheet = workbook.active
 
-    header = {cell.value: idx for idx, cell in enumerate(sheet[1], start=1)}
+    # =========================
+    # Styling configuration
+    # =========================
+    header_font = Font(name="Montserrat", bold=True, size=12)
+    cell_font = Font(name="Montserrat", size=10)
+    row_border = Border(
+        bottom=Side(style="thin", color="D9D9D9")
+    )
 
-    for row in range(2, sheet.max_row + 1):
-        for col_name in ["Alerta Fallos", "Alerta Volumen", "Alerta Responsabilidad"]:
-            col_idx = header[col_name]
-            cell = sheet.cell(row=row, column=col_idx)
-            fill = ALERT_COLORS.get(cell.value)
-            if fill:
-                cell.fill = fill
+    header_colors = {
+        "Provider": PatternFill("solid", fgColor="BDD7EE"),
+        "Politics Search": PatternFill("solid", fgColor="D9E1F2"),
+        "LOI": PatternFill("solid", fgColor="D9E1B2"),
+        "Species": PatternFill("solid", fgColor="E7E6E6"),
+        "Mamushka": PatternFill("solid", fgColor="D9F1D5"),
+        "Failure Rate %": PatternFill("solid", fgColor="F4B084"),
+        "Historic Failure Rate %": PatternFill("solid", fgColor="F8CBFA"),
+        "Failure Alert": PatternFill("solid", fgColor="FFF2CC"),
+        "Current Daily Avg Ops": PatternFill("solid", fgColor="DDEBF7"),
+        "Historic Daily Avg Ops": PatternFill("solid", fgColor="DDECD1"),
+        "Volume Deviation %": PatternFill("solid", fgColor="C6E0B4"),
+        "Volume Alert": PatternFill("solid", fgColor="FFF2CC"),
+        "Operations in Period": PatternFill("solid", fgColor="DEDAEF"),
+        "Metric": PatternFill("solid", fgColor="E7E6E6"),
+        "Value": PatternFill("solid", fgColor="BDD7EE"),
+    }
+
+    row_soft_colors = {
+        "Provider": PatternFill("solid", fgColor="E8F1FB"),
+        "Politics Search": PatternFill("solid", fgColor="EEF2FB"),
+        "LOI": PatternFill("solid", fgColor="F3F6E3"),
+        "Species": PatternFill("solid", fgColor="F4F4F4"),
+        "Mamushka": PatternFill("solid", fgColor="EEF9EC"),
+        "Operations in Period": PatternFill("solid", fgColor="F1EFFB"),
+        "Metric": PatternFill("solid", fgColor="F2F2F2"),
+        "Value": PatternFill("solid", fgColor="E8F1FB"),
+    }
+
+    row_colors = {
+        "CONCERN": PatternFill("solid", fgColor="FFF2CC"),
+        "SEVERE": PatternFill("solid", fgColor="F8CBAD"),
+        "URGENT": PatternFill("solid", fgColor="F4B084")
+    }
+
+    # =========================
+    # Apply formatting to sheets
+    # =========================
+
+    for sheet_name in workbook.sheetnames:
+
+        sheet = workbook[sheet_name]
+
+        headers = [cell.value for cell in sheet[1]]
+
+        # =========================
+        # Header formatting
+        # =========================
+        for col, header in enumerate(headers, start=1):
+
+            cell = sheet.cell(row=1, column=col)
+
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center")
+            cell.border = row_border
+
+            if header in header_colors:
+                cell.fill = header_colors[header]
+
+        # Add Excel filters
+        sheet.auto_filter.ref = sheet.dimensions
+
+        # Freeze header row
+        sheet.freeze_panes = "B2"
+
+        # =========================
+        # Detect alert column
+        # =========================
+        alert_column = None
+
+        for idx, name in enumerate(headers):
+            if "Alert" in name:
+                alert_column = idx + 1
+
+        # =========================
+        # Style rows (ALL sheets)
+        # =========================
+        for row in range(2, sheet.max_row + 1):
+
+            alert_value = None
+            alert_fill = None
+
+            if alert_column:
+                alert_value = sheet.cell(row=row, column=alert_column).value
+                alert_fill = row_colors.get(alert_value)
+
+            for col in range(1, sheet.max_column + 1):
+
+                cell = sheet.cell(row=row, column=col)
+                header_name = headers[col-1]
+
+                # Base style
+                cell.font = cell_font
+                cell.border = row_border
+
+                if header_name != "Provider":
+                    cell.alignment = Alignment(horizontal="center")
+
+                # Alert sheets coloring
+                if alert_fill:
+                    cell.fill = alert_fill
+
+                # Summary / Invalid Providers coloring
+                elif sheet_name in ["Summary", "Invalid Providers"]:
+                    soft_fill = row_soft_colors.get(header_name)
+                    if soft_fill:
+                        cell.fill = soft_fill
+
+        # =========================
+        # Auto-adjust column width
+        # =========================
+        for col in range(1, sheet.max_column + 1):
+
+            column_letter = get_column_letter(col)
+            max_length = 0
+
+            for row in range(1, sheet.max_row + 1):
+
+                cell = sheet.cell(row=row, column=col)
+
+                if cell.value:
+                    cell_length = len(str(cell.value))
+                    if cell_length > max_length:
+                        max_length = cell_length
+
+            adjusted_width = min(max_length + 2, 40)
+            adjusted_width = adjusted_width + 8
+
+            sheet.column_dimensions[column_letter].width = adjusted_width
 
     workbook.save(output_path)
 
-    print(f"Reporte de alertas generado: {output_path}")
-
+    print(f"Alert report generated successfully: {output_path}")
 
 if __name__ == "__main__":
     main()

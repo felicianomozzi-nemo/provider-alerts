@@ -22,6 +22,7 @@ load_dotenv()
 # DIR info
 HISTORIC_DATA = os.getenv("HISTORIC_DATA")
 CURRENT_DATA = os.getenv("CURRENT_DATA")
+PROVIDER_INFO_URL = os.getenv("PROVIDER_INFO_URL")
 
 # Index info
 INDEX_URL = os.getenv("INDEX_URL")
@@ -274,6 +275,11 @@ def load_csvs(time_range: str) -> tuple[pd.DataFrame]:
             return pd.DataFrame()
         # Process data
         df = pd.DataFrame([h['_source'] for h in all_hits])
+
+        # Normalize and save provider_info
+        provider_info = pd.read_csv(PROVIDER_INFO_URL)
+        provider_info["provider_name"] = provider_info["provider_name"].apply(normalize_name)
+        export_csv(provider_info, PROVIDER_INFO_URL)
 
         # Calculate size in memory of the data frame
         df_memory = df.memory_usage(deep=True).sum()
