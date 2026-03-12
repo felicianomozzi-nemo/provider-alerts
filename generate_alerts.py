@@ -59,18 +59,18 @@ def classify_failure_alert(rate: float, flag: bool) -> str:
     if pd.isna(rate):
         return "CAN'T EVALUATE"
     if not flag:
-        if rate >= 30:
+        if rate >= (MIN_FAILURE*3):
             return "URGENT"
-        if rate >= 22.5:
+        if rate >= (MIN_FAILURE*2):
             return "SEVERE"
-        if rate >= 15:
+        if rate >= (MIN_FAILURE*1.5):
             return "CONCERN"
     else:
-        if rate >= 20:
+        if rate >= (MIN_FAILURE*2):
             return "URGENT"
-        if rate >= 15:
+        if rate >= (MIN_FAILURE*1.5):
             return "SEVERE"
-        if rate >= 10:
+        if rate >= (MIN_FAILURE):
             return "CONCERN"
 
     return "OK"
@@ -98,15 +98,15 @@ def classify_volume_alert(deviation: float) -> str:
         return "CAN'T EVALUATE"
 
     # Volume increased or dropped less than 25%
-    if deviation > -25:
+    if deviation > (MIN_VOLUME):
         return "NORMAL"
 
     # Drop between 25% and 50%
-    if deviation > -50:
+    if deviation > (MIN_VOLUME*2):
         return "CONCERN"
 
     # Drop between 50% and 100%
-    if deviation > -100:
+    if deviation > (MIN_VOLUME*4):
         return "SEVERE"
 
     # Drop >= 100%
@@ -238,7 +238,7 @@ def main() -> None:
     df_failure_alerts = df[df["failure_alert"].isin(["CONCERN", "SEVERE", "URGENT"])]
 
     # Volume alerts (only drops >= 25%)
-    df_volume_alerts = df[df["volume_deviation"] <= -25]
+    df_volume_alerts = df[df["volume_deviation"] <= (MIN_VOLUME)]
 
     # Providers with invalid configuration (current_version = 0)
     df_version_alerts = df[
